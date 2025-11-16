@@ -52,9 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Adiciona componentes do sistema de autenticação
     adicionarCSSMobile();
     adicionarBotaoAdmin();
-    adicionarBotaoSincronizacao();
     adicionarLinkSecreto();
-    adicionarBotaoDebug();
     
     // Configura visibilidade do formulário de registro
     configurarVisibilidadeRegistro();
@@ -119,7 +117,8 @@ async function criarAdminPadrao() {
                 senha: 'admin',
                 dataCadastro: new Date().toISOString(),
                 criadoPor: 'sistema',
-                isAdmin: true
+                isAdmin: true,
+                ativo: true
             };
             
             usuarios.push(adminUsuario);
@@ -185,6 +184,12 @@ async function login() {
         const usuario = usuarios.find(user => {
             if (!user || typeof user !== 'object') {
                 console.log('❌ Usuário inválido:', user);
+                return false;
+            }
+            
+            // Verifica se o usuário está ativo
+            if (user.ativo === false) {
+                console.log('❌ Usuário desativado:', user.email);
                 return false;
             }
             
@@ -289,7 +294,8 @@ async function register() {
             senha: password,
             dataCadastro: new Date().toISOString(),
             criadoPor: currentUser ? currentUser.email : 'admin',
-            isAdmin: false
+            isAdmin: false,
+            ativo: true
         };
         
         usuarios.push(novoUsuario);
@@ -518,6 +524,9 @@ function aplicarDadosUsuario(dados) {
     if (dados.nextPacienteId) nextPacienteId = dados.nextPacienteId;
     if (dados.nextConsultaId) nextConsultaId = dados.nextConsultaId;
     
+    // Verificar pacientes com sessões completas
+    verificarPacientesComSessoesCompletas();
+    
     // Atualiza a UI do sistema de fisioterapia
     atualizarTabelaPacientes();
     atualizarAgendaHoje();
@@ -559,6 +568,8 @@ function carregarDadosLocais() {
     if (localData) {
         const data = JSON.parse(localData);
         aplicarDadosUsuario(data);
+        // Verificar pacientes com sessões completas
+        verificarPacientesComSessoesCompletas();
     } else {
         inicializarDadosNovoUsuario();
     }
@@ -680,34 +691,18 @@ function adicionarCSSMobile() {
     const style = document.createElement('style');
     style.innerHTML = `
         @media (max-width: 768px) {
-            #botao-sincronizar {
-                bottom: 70px !important;
-                right: 10px !important;
-                font-size: 16px !important;
-                padding: 12px 16px !important;
-                min-width: 70px;
-                min-height: 50px;
-            }
-            
             #botao-admin {
-                bottom: 130px !important;
+                bottom: 70px !important;
                 right: 10px !important;
                 font-size: 14px !important;
                 padding: 10px 14px !important;
             }
             
             #botao-sair-admin {
-                bottom: 180px !important;
+                bottom: 130px !important;
                 right: 10px !important;
                 font-size: 12px !important;
                 padding: 8px 12px !important;
-            }
-
-            #botao-debug {
-                bottom: 230px !important;
-                right: 10px !important;
-                font-size: 12px !important;
-                padding: 6px 10px !important;
             }
         }
         
@@ -727,121 +722,106 @@ function adicionarCSSMobile() {
         }
         
         @media (hover: none) and (pointer: coarse) {
-            #botao-sincronizar:active,
             #botao-admin:active,
-            #botao-sair-admin:active,
-            #botao-debug:active {
+            #botao-sair-admin:active {
                 transform: scale(0.95);
                 opacity: 0.8;
             }
         }
+
+        /* Estilos para o calendário */
+        .calendar-container {
+            position: relative;
+        }
+
+        .calendar-popup {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 10px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+
+        .calendar-day {
+            padding: 5px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .calendar-day:hover {
+            background: #f0f0f0;
+        }
+
+        .calendar-day.disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .calendar-day.selected {
+            background: #007bff;
+            color: white;
+        }
+
+        /* Estilos para o relógio */
+        .time-input-container {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .time-input {
+            width: 60px;
+            text-align: center;
+        }
+
+        .time-separator {
+            font-weight: bold;
+        }
+
+        /* Estilo para conflito de horário */
+        .time-conflict {
+            border: 2px solid #dc3545 !important;
+            background-color: #f8d7da !important;
+        }
+
+        .conflict-warning {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        /* Estilos para a modal de reativação */
+        #campoRedefinir {
+            transition: all 0.3s ease;
+        }
+
+        .form-check-label {
+            cursor: pointer;
+        }
+
+        .form-check-input {
+            cursor: pointer;
+        }
     `;
     document.head.appendChild(style);
-}
-
-// ========== FUNÇÃO: DEBUG DO JSONBIN ==========
-async function debugJSONBin() {
-    try {
-        console.log('🐛 INICIANDO DEBUG DO JSONBIN');
-        
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-            method: 'GET',
-            headers: {
-                'X-Master-Key': JSONBIN_API_KEY,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            console.error('❌ Erro na resposta:', response.status);
-            alert('❌ Erro ao acessar JSONBin. Verifique a conexão.');
-            return;
-        }
-        
-        const data = await response.json();
-        console.log('📦 Dados COMPLETOS do JSONBin:', data);
-        console.log('📝 Record (usuários):', data.record);
-        
-        let usuarios = data.record;
-        if (!Array.isArray(usuarios)) {
-            console.log('❌ Record não é array, tentando converter...');
-            if (typeof usuarios === 'object' && usuarios !== null) {
-                usuarios = Object.values(usuarios);
-            } else {
-                usuarios = [];
-            }
-        }
-        
-        console.log(`👥 ${usuarios.length} usuário(s) no total:`);
-        usuarios.forEach((user, index) => {
-            console.log(`   ${index + 1}.`, {
-                id: user.id,
-                nome: user.nome,
-                email: user.email,
-                temSenha: !!user.senha,
-                senha: user.senha ? '***' + user.senha.slice(-3) : 'N/A'
-            });
-        });
-        
-        alert(`🔍 DEBUG: ${usuarios.length} usuário(s) encontrado(s)\nVerifique o console para detalhes.`);
-        
-    } catch (error) {
-        console.error('❌ Erro no debug:', error);
-        alert('❌ Erro no debug: ' + error.message);
-    }
-}
-
-function adicionarBotaoDebug() {
-    // const botaoDebug = document.createElement('button');
-    botaoDebug.innerHTML = '🐛 Debug';
-    botaoDebug.className = 'btn btn-warning btn-sm btn-flutuante';
-    botaoDebug.onclick = debugJSONBin;
-    botaoDebug.id = 'botao-debug';
-    
-    botaoDebug.style.position = 'fixed';
-    botaoDebug.style.bottom = '230px';
-    botaoDebug.style.right = '10px';
-    botaoDebug.style.zIndex = '10000';
-    botaoDebug.style.fontSize = '12px';
-    botaoDebug.style.padding = '6px 10px';
-    botaoDebug.style.borderRadius = '20px';
-    botaoDebug.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
-    botaoDebug.style.border = '2px solid #fff';
-    botaoDebug.style.fontWeight = 'bold';
-    
-    document.body.appendChild(botaoDebug);
-}
-
-function adicionarBotaoSincronizacao() {
-    setTimeout(() => {
-        if (currentUser) {
-            const botaoExistente = document.getElementById('botao-sincronizar');
-            if (botaoExistente) {
-                botaoExistente.remove();
-            }
-            
-            const botaoSync = document.createElement('button');
-            botaoSync.innerHTML = '🔄 Sync';
-            botaoSync.className = 'btn btn-info btn-sm';
-            botaoSync.onclick = sincronizarManual;
-            botaoSync.id = 'botao-sincronizar';
-            
-            botaoSync.style.position = 'fixed';
-            botaoSync.style.bottom = '80px';
-            botaoSync.style.right = '10px';
-            botaoSync.style.zIndex = '10000';
-            botaoSync.style.fontSize = '14px';
-            botaoSync.style.padding = '8px 12px';
-            botaoSync.style.borderRadius = '20px';
-            botaoSync.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
-            botaoSync.style.border = '2px solid #fff';
-            botaoSync.style.background = '#17a2b8';
-            botaoSync.style.color = 'white';
-            botaoSync.style.fontWeight = 'bold';
-            
-            document.body.appendChild(botaoSync);
-        }
-    }, 3000);
 }
 
 function adicionarBotaoAdmin() {
@@ -861,7 +841,7 @@ function adicionarBotaoAdmin() {
             botao.id = 'botao-admin';
             
             botao.style.position = 'fixed';
-            botao.style.bottom = '130px';
+            botao.style.bottom = '80px';
             botao.style.right = '10px';
             botao.style.zIndex = '10000';
             botao.style.fontSize = '14px';
@@ -880,7 +860,7 @@ function adicionarBotaoAdmin() {
             botaoSair.id = 'botao-sair-admin';
             
             botaoSair.style.position = 'fixed';
-            botaoSair.style.bottom = '180px';
+            botaoSair.style.bottom = '130px';
             botaoSair.style.right = '10px';
             botaoSair.style.zIndex = '10000';
             botaoSair.style.fontSize = '12px';
@@ -1000,6 +980,7 @@ function criarModalUsuarios(usuarios) {
                                         <th>Senha</th>
                                         <th>Data Cadastro</th>
                                         <th>Criado Por</th>
+                                        <th>Status</th>
                                         <th>Ações</th>
                                     </tr>
                                 </thead>
@@ -1025,8 +1006,13 @@ function criarModalUsuarios(usuarios) {
                                             <td>${new Date(usuario.dataCadastro).toLocaleDateString('pt-BR')}</td>
                                             <td>${usuario.criadoPor || 'N/A'}</td>
                                             <td>
-                                                <button class="btn btn-danger btn-sm" onclick="excluirUsuario('${usuario.id}', '${usuario.nome}')" ${usuario.email === 'admin' ? 'disabled title="Não é possível excluir o admin principal"' : ''}>
-                                                    <i class="bi bi-trash"></i> Excluir
+                                                <span class="badge ${usuario.ativo ? 'bg-success' : 'bg-danger'}">
+                                                    ${usuario.ativo ? 'Ativo' : 'Inativo'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="btn ${usuario.ativo ? 'btn-warning' : 'btn-success'} btn-sm" onclick="toggleUsuario('${usuario.id}', ${!usuario.ativo})" ${usuario.email === 'admin' ? 'disabled title="Não é possível desativar o admin principal"' : ''}>
+                                                    <i class="bi ${usuario.ativo ? 'bi-person-dash' : 'bi-person-check'}"></i> ${usuario.ativo ? 'Desativar' : 'Ativar'}
                                                 </button>
                                             </td>
                                         </tr>
@@ -1037,6 +1023,7 @@ function criarModalUsuarios(usuarios) {
                         <div class="row mt-3">
                             <div class="col-md-6">
                                 <p><strong>Total:</strong> <span id="total-usuarios">${usuarios.length}</span> usuário(s)</p>
+                                <p><strong>Ativos:</strong> <span id="usuarios-ativos">${usuarios.filter(u => u.ativo).length}</span> usuário(s)</p>
                             </div>
                             <div class="col-md-6 text-end">
                                 <button class="btn btn-warning btn-sm" onclick="criarUsuarioAdmin()">
@@ -1078,12 +1065,8 @@ function toggleSenha(usuarioId) {
     }
 }
 
-// ========== FUNÇÃO PARA EXCLUIR USUÁRIO ==========
-async function excluirUsuario(usuarioId, usuarioNome) {
-    if (!confirm(`🚨 ATENÇÃO: Deseja excluir permanentemente o usuário "${usuarioNome}"?\n\nEsta ação não pode ser desfeita e todos os dados deste usuário serão perdidos!`)) {
-        return;
-    }
-    
+// ========== FUNÇÃO PARA ATIVAR/DESATIVAR USUÁRIO ==========
+async function toggleUsuario(usuarioId, novoEstado) {
     try {
         const usuarios = await buscarUsuarios();
         const usuarioIndex = usuarios.findIndex(user => user.id === usuarioId);
@@ -1093,32 +1076,33 @@ async function excluirUsuario(usuarioId, usuarioNome) {
             return;
         }
         
-        usuarios.splice(usuarioIndex, 1);
+        usuarios[usuarioIndex].ativo = novoEstado;
         
         const sucesso = await salvarUsuarios(usuarios);
         
         if (sucesso) {
-            const linha = document.getElementById(`user-row-${usuarioId}`);
-            if (linha) {
-                linha.remove();
+            const statusElement = document.querySelector(`#user-row-${usuarioId} .badge`);
+            const botaoElement = document.querySelector(`#user-row-${usuarioId} .btn`);
+            
+            if (statusElement) {
+                statusElement.className = novoEstado ? 'badge bg-success' : 'badge bg-danger';
+                statusElement.textContent = novoEstado ? 'Ativo' : 'Inativo';
+            }
+            
+            if (botaoElement) {
+                botaoElement.className = novoEstado ? 'btn btn-warning btn-sm' : 'btn btn-success btn-sm';
+                botaoElement.innerHTML = `<i class="bi ${novoEstado ? 'bi-person-dash' : 'bi-person-check'}"></i> ${novoEstado ? 'Desativar' : 'Ativar'}`;
             }
             
             atualizarContadorUsuarios();
             
-            alert(`✅ Usuário "${usuarioNome}" excluído com sucesso!`);
-            
-            if (currentUser && currentUser.id === usuarioId) {
-                alert('⚠️ Você excluiu sua própria conta. Fazendo logout...');
-                setTimeout(() => {
-                    logout();
-                }, 2000);
-            }
+            alert(`✅ Usuário ${novoEstado ? 'ativado' : 'desativado'} com sucesso!`);
         } else {
-            alert('❌ Erro ao excluir usuário. Tente novamente.');
+            alert('❌ Erro ao alterar status do usuário. Tente novamente.');
         }
     } catch (error) {
-        console.error('Erro ao excluir usuário:', error);
-        alert('❌ Erro ao excluir usuário: ' + error.message);
+        console.error('Erro ao alterar usuário:', error);
+        alert('❌ Erro ao alterar status do usuário: ' + error.message);
     }
 }
 
@@ -1127,10 +1111,15 @@ function atualizarContadorUsuarios() {
     const tbody = document.querySelector('#modalUsuarios tbody');
     if (tbody) {
         const totalUsuarios = tbody.children.length;
+        const usuariosAtivos = Array.from(tbody.querySelectorAll('.badge')).filter(badge => 
+            badge.classList.contains('bg-success')
+        ).length;
+        
         const contadorElement = document.getElementById('total-usuarios');
-        if (contadorElement) {
-            contadorElement.textContent = totalUsuarios;
-        }
+        const ativosElement = document.getElementById('usuarios-ativos');
+        
+        if (contadorElement) contadorElement.textContent = totalUsuarios;
+        if (ativosElement) ativosElement.textContent = usuariosAtivos;
     }
 }
 
@@ -1161,7 +1150,8 @@ async function criarUsuarioAdmin() {
             senha: senha,
             dataCadastro: new Date().toISOString(),
             criadoPor: currentUser ? currentUser.email : 'system',
-            isAdmin: true
+            isAdmin: true,
+            ativo: true
         };
         
         usuarios.push(novoAdmin);
@@ -1235,48 +1225,7 @@ function checkOnlineStatus() {
 }
 
 function updateOnlineStatusUI() {
-    const syncIcon = document.getElementById('sync-icon');
-    const syncText = document.getElementById('sync-text');
-    
-    if (syncIcon && syncText) {
-        if (isOnline) {
-            syncIcon.className = 'bi bi-cloud-check online';
-            syncText.textContent = 'Sincronizado';
-        } else {
-            syncIcon.className = 'bi bi-cloud-slash offline';
-            syncText.textContent = 'Offline';
-        }
-    }
-}
-
-async function sincronizarManual() {
-    if (!currentUser) return;
-    
-    const botao = document.getElementById('botao-sincronizar');
-    const originalText = botao.innerHTML;
-    botao.innerHTML = '⏳ Sincronizando...';
-    botao.disabled = true;
-    
-    try {
-        await carregarDadosUsuarioAtual();
-        await salvarDadosUsuarioAtual();
-        
-        botao.innerHTML = '✅ Sincronizado!';
-        setTimeout(() => {
-            botao.innerHTML = originalText;
-            botao.disabled = false;
-        }, 2000);
-        
-        alert('✅ Dados sincronizados entre todos os dispositivos!');
-    } catch (error) {
-        console.error('Erro na sincronização:', error);
-        botao.innerHTML = '❌ Erro';
-        setTimeout(() => {
-            botao.innerHTML = originalText;
-            botao.disabled = false;
-        }, 2000);
-        alert('❌ Erro na sincronização. Verifique sua conexão.');
-    }
+    // Removido o ícone de sincronização
 }
 
 function setupPeriodicSync() {
@@ -1442,7 +1391,7 @@ function atualizarTabelaPacientes() {
                 </span>
             </td>
             <td>
-                <button class="btn btn-outline-primary btn-sm" onclick="agendarConsulta(${paciente.id})">
+                <button class="btn btn-outline-primary btn-sm" onclick="abrirModalAgendamento(${paciente.id})">
                     <i class="bi bi-calendar-plus"></i> Agendar
                 </button>
             </td>
@@ -1465,16 +1414,212 @@ function atualizarTabelaPacientes() {
     });
 }
 
+// ========== MODAL DE AGENDAMENTO COM CALENDÁRIO E RELÓGIO ==========
+
+function abrirModalAgendamento(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+
+    // Criar modal de agendamento
+    const modalHTML = `
+        <div class="modal fade" id="modalAgendamento" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Agendar Consulta - ${paciente.nome}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Data da Consulta</label>
+                            <input type="date" class="form-control" id="dataConsulta" min="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Horário</label>
+                            <div class="time-input-container">
+                                <input type="number" class="form-control time-input" id="horaConsulta" min="0" max="23" placeholder="HH" value="14">
+                                <span class="time-separator">:</span>
+                                <input type="number" class="form-control time-input" id="minutoConsulta" min="0" max="59" placeholder="MM" value="30">
+                            </div>
+                            <div id="horario-conflito" class="conflict-warning d-none"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor da Consulta (R$)</label>
+                            <input type="number" class="form-control" id="valorConsulta" step="0.01" value="120.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Procedimento</label>
+                            <select class="form-control" id="procedimentoConsulta">
+                                <option value="Fisioterapia Convencional">Fisioterapia Convencional</option>
+                                <option value="Pilates">Pilates</option>
+                                <option value="Hidroterapia">Hidroterapia</option>
+                                <option value="Acupuntura">Acupuntura</option>
+                                <option value="Avaliação Inicial">Avaliação Inicial</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmarAgendamento(${pacienteId})">Agendar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remover modal existente se houver
+    const modalExistente = document.getElementById('modalAgendamento');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Adicionar event listeners para validação de horário
+    document.getElementById('horaConsulta').addEventListener('input', validarHorario);
+    document.getElementById('minutoConsulta').addEventListener('input', validarHorario);
+    document.getElementById('dataConsulta').addEventListener('change', verificarConflitoHorario);
+
+    const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
+    modal.show();
+}
+
+function validarHorario() {
+    const horaInput = document.getElementById('horaConsulta');
+    const minutoInput = document.getElementById('minutoConsulta');
+    
+    let hora = parseInt(horaInput.value);
+    let minuto = parseInt(minutoInput.value);
+    
+    // Validar hora
+    if (hora < 0) hora = 0;
+    if (hora > 23) hora = 23;
+    
+    // Validar minuto
+    if (minuto < 0) minuto = 0;
+    if (minuto > 59) minuto = 59;
+    
+    horaInput.value = hora;
+    minutoInput.value = minuto.toString().padStart(2, '0');
+    
+    // Verificar conflito
+    verificarConflitoHorario();
+}
+
+function verificarConflitoHorario() {
+    const dataInput = document.getElementById('dataConsulta').value;
+    const horaInput = document.getElementById('horaConsulta').value;
+    const minutoInput = document.getElementById('minutoConsulta').value;
+    const conflitoElement = document.getElementById('horario-conflito');
+    
+    if (!dataInput || !horaInput || !minutoInput) return;
+    
+    const dataConsulta = new Date(dataInput);
+    const horaCompleta = `${horaInput.padStart(2, '0')}:${minutoInput.padStart(2, '0')}`;
+    
+    // Verificar se já existe consulta no mesmo horário
+    const conflito = agendaHoje.find(consulta => {
+        const dataExistente = new Date(consulta.data);
+        const dataConsultaComparar = new Date(dataConsulta);
+        
+        return dataExistente.toDateString() === dataConsultaComparar.toDateString() && 
+               consulta.hora === horaCompleta;
+    });
+    
+    if (conflito) {
+        conflitoElement.textContent = `⚠️ Conflito de horário: ${conflito.pacienteNome} já está agendado(a)`;
+        conflitoElement.classList.remove('d-none');
+        document.getElementById('horaConsulta').classList.add('time-conflict');
+        document.getElementById('minutoConsulta').classList.add('time-conflict');
+    } else {
+        conflitoElement.classList.add('d-none');
+        document.getElementById('horaConsulta').classList.remove('time-conflict');
+        document.getElementById('minutoConsulta').classList.remove('time-conflict');
+    }
+}
+
+function confirmarAgendamento(pacienteId) {
+    const dataInput = document.getElementById('dataConsulta').value;
+    const horaInput = document.getElementById('horaConsulta').value;
+    const minutoInput = document.getElementById('minutoConsulta').value;
+    const valorInput = document.getElementById('valorConsulta').value;
+    const procedimentoInput = document.getElementById('procedimentoConsulta').value;
+    
+    if (!dataInput || !horaInput || !minutoInput || !valorInput) {
+        alert('Preencha todos os campos!');
+        return;
+    }
+    
+    // Validar data (não pode ser anterior à data atual)
+    const dataConsulta = new Date(dataInput);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    if (dataConsulta < hoje) {
+        alert('❌ Não é possível agendar para uma data passada!');
+        return;
+    }
+    
+    const valor = parseFloat(valorInput);
+    if (isNaN(valor) || valor <= 0) {
+        alert('Valor inválido!');
+        return;
+    }
+    
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+    
+    const horaCompleta = `${horaInput.padStart(2, '0')}:${minutoInput.padStart(2, '0')}`;
+    
+    // Verificar conflito final
+    const conflito = agendaHoje.find(consulta => {
+        const dataExistente = new Date(consulta.data);
+        const dataConsultaComparar = new Date(dataConsulta);
+        
+        return dataExistente.toDateString() === dataConsultaComparar.toDateString() && 
+               consulta.hora === horaCompleta;
+    });
+    
+    if (conflito) {
+        alert(`❌ Conflito de horário! ${conflito.pacienteNome} já está agendado(a) para este horário.`);
+        return;
+    }
+    
+    const consulta = {
+        id: nextConsultaId++,
+        pacienteId: paciente.id,
+        pacienteNome: paciente.nome,
+        data: dataConsulta.toISOString(),
+        dataAgendamento: new Date().toISOString(),
+        dataDisplay: dataConsulta.toLocaleDateString('pt-BR'),
+        hora: horaCompleta,
+        procedimento: procedimentoInput,
+        valor: valor,
+        status: 'agendado'
+    };
+    
+    agendaHoje.push(consulta);
+    salvarDadosUsuarioAtual();
+    atualizarAgendaHoje();
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgendamento'));
+    modal.hide();
+    
+    alert(`✅ Consulta agendada para ${consulta.dataDisplay} às ${consulta.hora}! Valor: R$ ${valor.toFixed(2)}`);
+}
+
 function realizarSessao(pacienteId) {
     const paciente = pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
     
     if (paciente.sessoesRealizadas >= paciente.sessoesPrescritas) {
-        alert('Todas as sessões prescritas já foram realizadas!');
+        alert('Todas as sessões prescritas já foram realizadas! O paciente será desativado automaticamente.');
+        paciente.ativo = false;
+        salvarDadosUsuarioAtual();
+        atualizarTabelaPacientes();
         return;
     }
     
-    // MODIFICAÇÃO: Permitir escolher o valor da consulta
     const valorInput = prompt('Digite o valor da consulta (R$):', '120.00');
     if (!valorInput) return;
     
@@ -1486,6 +1631,12 @@ function realizarSessao(pacienteId) {
     
     paciente.sessoesRealizadas++;
     
+    // VERIFICAÇÃO AUTOMÁTICA: Desativar paciente se atingiu o limite de sessões
+    if (paciente.sessoesRealizadas >= paciente.sessoesPrescritas) {
+        paciente.ativo = false;
+        console.log(`✅ Paciente ${paciente.nome} atingiu o limite de sessões e foi automaticamente desativado.`);
+    }
+    
     const consulta = {
         id: nextConsultaId++,
         pacienteId: paciente.id,
@@ -1493,7 +1644,6 @@ function realizarSessao(pacienteId) {
         data: new Date().toISOString(),
         procedimento: 'Fisioterapia Convencional',
         valor: valor,
-        duracao: 60,
         status: 'realizado'
     };
     
@@ -1514,59 +1664,422 @@ function realizarSessao(pacienteId) {
     
     salvarDadosUsuarioAtual();
     atualizarTabelaPacientes();
-    alert(`Sessão registrada com sucesso para ${paciente.nome}! Valor: R$ ${valor.toFixed(2)}`);
+    
+    let mensagem = `Sessão registrada com sucesso para ${paciente.nome}! Valor: R$ ${valor.toFixed(2)}`;
+    if (!paciente.ativo) {
+        mensagem += `\n\n⚠️ ${paciente.nome} atingiu o limite de sessões e foi automaticamente desativado.`;
+    }
+    alert(mensagem);
 }
 
-// MODIFICAÇÃO: Agendar com data, hora e valor personalizado
-function agendarConsulta(pacienteId) {
-    const paciente = pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
+function realizarConsulta(consultaId) {
+    const consultaIndex = agendaHoje.findIndex(c => c.id === consultaId);
+    if (consultaIndex === -1) return;
     
-    // Solicitar data
-    const dataInput = prompt('Digite a data para a consulta (DD/MM/AAAA):', new Date().toLocaleDateString('pt-BR'));
-    if (!dataInput) return;
+    const consulta = agendaHoje[consultaIndex];
+    consulta.status = 'realizado';
+    consulta.data = new Date().toISOString();
     
-    // Validar data
-    const [dia, mes, ano] = dataInput.split('/');
-    const dataConsulta = new Date(ano, mes - 1, dia);
-    if (isNaN(dataConsulta.getTime())) {
-        alert('Data inválida! Use o formato DD/MM/AAAA');
-        return;
+    consultas.push(consulta);
+    agendaHoje.splice(consultaIndex, 1);
+    
+    const paciente = pacientes.find(p => p.id === consulta.pacienteId);
+    if (paciente) {
+        paciente.sessoesRealizadas++;
+        
+        // VERIFICAÇÃO AUTOMÁTICA: Desativar paciente se atingiu o limite de sessões
+        if (paciente.sessoesRealizadas >= paciente.sessoesPrescritas) {
+            paciente.ativo = false;
+            console.log(`✅ Paciente ${paciente.nome} atingiu o limite de sessões e foi automaticamente desativado.`);
+        }
     }
     
-    // Solicitar hora
-    const hora = prompt('Digite o horário para a consulta (ex: 14:30):');
-    if (!hora) return;
-    
-    // Solicitar valor
-    const valorInput = prompt('Digite o valor da consulta (R$):', '120.00');
-    if (!valorInput) return;
-    
-    const valor = parseFloat(valorInput.replace(',', '.'));
-    if (isNaN(valor) || valor <= 0) {
-        alert('Valor inválido!');
-        return;
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    if (relatorioDiario.data === hoje) {
+        relatorioDiario.totalAtendimentos++;
+        relatorioDiario.totalFaturamento += consulta.valor;
+        relatorioDiario.atendimentos.push({
+            id: consulta.id,
+            hora: new Date().toLocaleTimeString('pt-BR'),
+            paciente: consulta.pacienteNome,
+            procedimento: consulta.procedimento,
+            valor: consulta.valor
+        });
     }
     
-    const consulta = {
-        id: nextConsultaId++,
-        pacienteId: paciente.id,
-        pacienteNome: paciente.nome,
-        data: dataConsulta.toISOString(),
-        dataAgendamento: new Date().toISOString(),
-        dataDisplay: dataInput,
-        hora: hora,
-        procedimento: 'Fisioterapia Convencional',
-        valor: valor,
-        duracao: 60,
-        status: 'agendado'
-    };
-    
-    agendaHoje.push(consulta);
     salvarDadosUsuarioAtual();
     atualizarAgendaHoje();
-    alert(`Consulta agendada para ${dataInput} às ${hora}! Valor: R$ ${valor.toFixed(2)}`);
+    atualizarTabelaPacientes(); // Atualiza automaticamente a tabela de pacientes
+    alert('✅ Consulta realizada com sucesso!' + (paciente && !paciente.ativo ? `\n\n⚠️ ${paciente.nome} atingiu o limite de sessões e foi automaticamente desativado.` : ''));
 }
+
+// ========== FUNÇÃO PARA VERIFICAR PACIENTES COM SESSÕES COMPLETAS ==========
+function verificarPacientesComSessoesCompletas() {
+    pacientes.forEach(paciente => {
+        if (paciente.ativo && paciente.sessoesRealizadas >= paciente.sessoesPrescritas) {
+            paciente.ativo = false;
+            console.log(`🔄 Paciente ${paciente.nome} tinha sessões completas e foi automaticamente desativado ao carregar.`);
+        }
+    });
+}
+
+function atualizarAgendaHoje() {
+    const agendaList = document.getElementById('agenda-items-list');
+    const agendaEmpty = document.getElementById('agenda-empty');
+    const agendaItems = document.getElementById('agenda-items');
+    
+    if (!agendaList) return;
+    
+    agendaList.innerHTML = '';
+    
+    // Filtrar apenas consultas futuras ou do dia atual
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    const agendaFiltrada = agendaHoje.filter(consulta => {
+        const dataConsulta = new Date(consulta.data);
+        return dataConsulta >= hoje;
+    });
+    
+    if (agendaFiltrada.length === 0) {
+        if (agendaEmpty) agendaEmpty.classList.remove('d-none');
+        if (agendaItems) agendaItems.classList.add('d-none');
+        return;
+    }
+    
+    if (agendaEmpty) agendaEmpty.classList.add('d-none');
+    if (agendaItems) agendaItems.classList.remove('d-none');
+    
+    // Ordenar agenda por data e hora
+    agendaFiltrada.sort((a, b) => {
+        const dataA = new Date(a.data);
+        const dataB = new Date(b.data);
+        return dataA - dataB;
+    });
+    
+    agendaFiltrada.forEach(consulta => {
+        const agendaItem = document.createElement('div');
+        agendaItem.className = 'agenda-item';
+        
+        const dataDisplay = consulta.dataDisplay || new Date(consulta.data).toLocaleDateString('pt-BR');
+        
+        agendaItem.innerHTML = `
+            <div><strong>${dataDisplay} ${consulta.hora}</strong></div>
+            <div>${consulta.pacienteNome}</div>
+            <div>${consulta.procedimento}</div>
+            <div>R$ ${consulta.valor.toFixed(2)}</div>
+            <div class="agenda-actions">
+                <button class="btn btn-success btn-sm" onclick="realizarConsulta(${consulta.id})" title="Realizar Consulta">
+                    <i class="bi bi-check-circle"></i>
+                </button>
+                <button class="btn btn-warning btn-sm" onclick="remarcarConsulta(${consulta.id})" title="Remarcar Consulta">
+                    <i class="bi bi-calendar-check"></i>
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="cancelarConsulta(${consulta.id})" title="Cancelar Consulta">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            </div>
+        `;
+        agendaList.appendChild(agendaItem);
+    });
+    
+    const consultasHojeElement = document.getElementById('consultas-hoje');
+    if (consultasHojeElement) {
+        consultasHojeElement.textContent = `Consultas agendadas: ${agendaFiltrada.length}`;
+    }
+}
+
+// ========== FUNÇÕES PARA REMARCAR E CANCELAR CONSULTAS ==========
+
+function remarcarConsulta(consultaId) {
+    const consultaIndex = agendaHoje.findIndex(c => c.id === consultaId);
+    if (consultaIndex === -1) return;
+    
+    const consulta = agendaHoje[consultaIndex];
+    const paciente = pacientes.find(p => p.id === consulta.pacienteId);
+    
+    if (!paciente) return;
+    
+    // Abrir modal de agendamento com os dados atuais
+    const modalHTML = `
+        <div class="modal fade" id="modalRemarcacao" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Remarcar Consulta - ${paciente.nome}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Data da Consulta</label>
+                            <input type="date" class="form-control" id="dataRemarcacao" min="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Horário</label>
+                            <div class="time-input-container">
+                                <input type="number" class="form-control time-input" id="horaRemarcacao" min="0" max="23" placeholder="HH">
+                                <span class="time-separator">:</span>
+                                <input type="number" class="form-control time-input" id="minutoRemarcacao" min="0" max="59" placeholder="MM">
+                            </div>
+                            <div id="remarcacao-conflito" class="conflict-warning d-none"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmarRemarcacao(${consultaId})">Remarcar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modalExistente = document.getElementById('modalRemarcacao');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Preencher com dados atuais
+    const dataAtual = new Date(consulta.data);
+    document.getElementById('dataRemarcacao').value = dataAtual.toISOString().split('T')[0];
+    
+    const [hora, minuto] = consulta.hora.split(':');
+    document.getElementById('horaRemarcacao').value = hora;
+    document.getElementById('minutoRemarcacao').value = minuto;
+    
+    // Adicionar event listeners
+    document.getElementById('horaRemarcacao').addEventListener('input', validarHorarioRemarcacao);
+    document.getElementById('minutoRemarcacao').addEventListener('input', validarHorarioRemarcacao);
+    document.getElementById('dataRemarcacao').addEventListener('change', verificarConflitoRemarcacao);
+
+    const modal = new bootstrap.Modal(document.getElementById('modalRemarcacao'));
+    modal.show();
+}
+
+function validarHorarioRemarcacao() {
+    const horaInput = document.getElementById('horaRemarcacao');
+    const minutoInput = document.getElementById('minutoRemarcacao');
+    
+    let hora = parseInt(horaInput.value);
+    let minuto = parseInt(minutoInput.value);
+    
+    // Validar hora
+    if (hora < 0) hora = 0;
+    if (hora > 23) hora = 23;
+    
+    // Validar minuto
+    if (minuto < 0) minuto = 0;
+    if (minuto > 59) minuto = 59;
+    
+    horaInput.value = hora;
+    minutoInput.value = minuto.toString().padStart(2, '0');
+    
+    verificarConflitoRemarcacao();
+}
+
+function verificarConflitoRemarcacao() {
+    const dataInput = document.getElementById('dataRemarcacao').value;
+    const horaInput = document.getElementById('horaRemarcacao').value;
+    const minutoInput = document.getElementById('minutoRemarcacao').value;
+    const conflitoElement = document.getElementById('remarcacao-conflito');
+    
+    if (!dataInput || !horaInput || !minutoInput) return;
+    
+    const dataConsulta = new Date(dataInput);
+    const horaCompleta = `${horaInput.padStart(2, '0')}:${minutoInput.padStart(2, '0')}`;
+    
+    // Verificar se já existe consulta no mesmo horário (excluindo a própria consulta que está sendo remarcada)
+    const conflito = agendaHoje.find(consulta => {
+        const dataExistente = new Date(consulta.data);
+        const dataConsultaComparar = new Date(dataConsulta);
+        
+        return dataExistente.toDateString() === dataConsultaComparar.toDateString() && 
+               consulta.hora === horaCompleta &&
+               consulta.id !== consultaId; // Excluir a própria consulta
+    });
+    
+    if (conflito) {
+        conflitoElement.textContent = `⚠️ Conflito de horário: ${conflito.pacienteNome} já está agendado(a)`;
+        conflitoElement.classList.remove('d-none');
+        document.getElementById('horaRemarcacao').classList.add('time-conflict');
+        document.getElementById('minutoRemarcacao').classList.add('time-conflict');
+    } else {
+        conflitoElement.classList.add('d-none');
+        document.getElementById('horaRemarcacao').classList.remove('time-conflict');
+        document.getElementById('minutoRemarcacao').classList.remove('time-conflict');
+    }
+}
+
+function confirmarRemarcacao(consultaId) {
+    const dataInput = document.getElementById('dataRemarcacao').value;
+    const horaInput = document.getElementById('horaRemarcacao').value;
+    const minutoInput = document.getElementById('minutoRemarcacao').value;
+    
+    if (!dataInput || !horaInput || !minutoInput) {
+        alert('Preencha todos os campos!');
+        return;
+    }
+    
+    const dataConsulta = new Date(dataInput);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    if (dataConsulta < hoje) {
+        alert('❌ Não é possível remarcar para uma data passada!');
+        return;
+    }
+    
+    const horaCompleta = `${horaInput.padStart(2, '0')}:${minutoInput.padStart(2, '0')}`;
+    
+    // Verificar conflito final
+    const conflito = agendaHoje.find(consulta => {
+        const dataExistente = new Date(consulta.data);
+        const dataConsultaComparar = new Date(dataConsulta);
+        
+        return dataExistente.toDateString() === dataConsultaComparar.toDateString() && 
+               consulta.hora === horaCompleta &&
+               consulta.id !== consultaId; // Excluir a própria consulta
+    });
+    
+    if (conflito) {
+        alert(`❌ Conflito de horário! ${conflito.pacienteNome} já está agendado(a) para este horário.`);
+        return;
+    }
+    
+    const consultaIndex = agendaHoje.findIndex(c => c.id === consultaId);
+    if (consultaIndex === -1) return;
+    
+    const consulta = agendaHoje[consultaIndex];
+    consulta.data = dataConsulta.toISOString();
+    consulta.dataDisplay = dataConsulta.toLocaleDateString('pt-BR');
+    consulta.hora = horaCompleta;
+    
+    salvarDadosUsuarioAtual();
+    atualizarAgendaHoje();
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalRemarcacao'));
+    modal.hide();
+    
+    alert(`✅ Consulta remarcada para ${consulta.dataDisplay} às ${consulta.hora}!`);
+}
+
+function cancelarConsulta(consultaId) {
+    if (!confirm('Deseja cancelar esta consulta?')) return;
+
+    const consultaIndex = agendaHoje.findIndex(c => c.id === consultaId);
+    if (consultaIndex === -1) return;
+
+    const consulta = agendaHoje[consultaIndex];
+    agendaHoje.splice(consultaIndex, 1);
+    salvarDadosUsuarioAtual();
+    atualizarAgendaHoje();
+    alert('✅ Consulta cancelada com sucesso!');
+}
+
+// ========== SISTEMA DE RELATÓRIOS COM FILTRO POR PERÍODO ==========
+
+function atualizarRelatorios() {
+    // Esta função agora será chamada pelo filtro de período
+    aplicarFiltroRelatorio();
+}
+
+function aplicarFiltroRelatorio() {
+    const dataInicio = document.getElementById('data-inicio') ? document.getElementById('data-inicio').value : '';
+    const dataFim = document.getElementById('data-fim') ? document.getElementById('data-fim').value : '';
+    
+    let consultasFiltradas = consultas.filter(c => c.status === 'realizado');
+    let pacientesAtivosFiltrados = pacientes.filter(p => p.ativo);
+    
+    // Aplicar filtro de período se as datas estiverem preenchidas
+    if (dataInicio && dataFim) {
+        const inicio = new Date(dataInicio);
+        const fim = new Date(dataFim);
+        fim.setHours(23, 59, 59, 999);
+        
+        consultasFiltradas = consultasFiltradas.filter(consulta => {
+            const dataConsulta = new Date(consulta.data);
+            return dataConsulta >= inicio && dataConsulta <= fim;
+        });
+        
+        // Para pacientes ativos, considerar os que tiveram consultas no período
+        pacientesAtivosFiltrados = pacientes.filter(paciente => 
+            paciente.ativo && consultasFiltradas.some(consulta => consulta.pacienteId === paciente.id)
+        );
+    }
+    
+    const totalAtendimentosElement = document.getElementById("total-atendimentos");
+    if (totalAtendimentosElement) {
+        totalAtendimentosElement.textContent = consultasFiltradas.length;
+    }
+    
+    const totalPacientesElement = document.getElementById("total-pacientes");
+    if (totalPacientesElement) {
+        totalPacientesElement.textContent = pacientesAtivosFiltrados.length;
+    }
+    
+    const totalFaturamentoElement = document.getElementById("total-faturamento");
+    if (totalFaturamentoElement) {
+        const faturamentoTotal = consultasFiltradas.reduce((total, c) => total + c.valor, 0);
+        totalFaturamentoElement.textContent = `R$ ${faturamentoTotal.toFixed(2)}`;
+    }
+}
+
+function inicializarFiltroRelatorio() {
+    // Adicionar inputs de filtro se não existirem
+    if (!document.getElementById('filtro-relatorio')) {
+        const filtroHTML = `
+            <div id="filtro-relatorio" class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">📊 Filtro por Período</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="data-inicio" class="form-label">Data Início</label>
+                            <input type="date" class="form-control" id="data-inicio">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="data-fim" class="form-label">Data Fim</label>
+                            <input type="date" class="form-control" id="data-fim">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button class="btn btn-primary" onclick="aplicarFiltroRelatorio()">Aplicar Filtro</button>
+                                <button class="btn btn-secondary" onclick="limparFiltroRelatorio()">Limpar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const relatoriosContainer = document.getElementById('pagina-relatorios');
+        if (relatoriosContainer) {
+            const primeiroCard = relatoriosContainer.querySelector('.card');
+            if (primeiroCard) {
+                primeiroCard.insertAdjacentHTML('beforebegin', filtroHTML);
+            }
+        }
+        
+        // Adicionar event listeners
+        document.getElementById('data-inicio').addEventListener('change', aplicarFiltroRelatorio);
+        document.getElementById('data-fim').addEventListener('change', aplicarFiltroRelatorio);
+    }
+}
+
+function limparFiltroRelatorio() {
+    const dataInicio = document.getElementById('data-inicio');
+    const dataFim = document.getElementById('data-fim');
+    
+    if (dataInicio) dataInicio.value = '';
+    if (dataFim) dataFim.value = '';
+    
+    aplicarFiltroRelatorio();
+}
+
+// ========== FUNÇÕES RESTANTES DO SISTEMA DE FISIOTERAPIA ==========
 
 function editarPaciente(pacienteId) {
     const paciente = pacientes.find(p => p.id === pacienteId);
@@ -1590,112 +2103,6 @@ function desativarPaciente(pacienteId) {
             atualizarTabelaPacientes();
             alert('Paciente desativado com sucesso!');
         }
-    }
-}
-
-function atualizarAgendaHoje() {
-    const agendaList = document.getElementById('agenda-items-list');
-    const agendaEmpty = document.getElementById('agenda-empty');
-    const agendaItems = document.getElementById('agenda-items');
-    
-    if (!agendaList) return;
-    
-    agendaList.innerHTML = '';
-    
-    if (agendaHoje.length === 0) {
-        if (agendaEmpty) agendaEmpty.classList.remove('d-none');
-        if (agendaItems) agendaItems.classList.add('d-none');
-        return;
-    }
-    
-    if (agendaEmpty) agendaEmpty.classList.add('d-none');
-    if (agendaItems) agendaItems.classList.remove('d-none');
-    
-    // Ordenar agenda por data e hora
-    agendaHoje.sort((a, b) => {
-        const dataA = new Date(a.data);
-        const dataB = new Date(b.data);
-        return dataA - dataB;
-    });
-    
-    agendaHoje.forEach(consulta => {
-        const agendaItem = document.createElement('div');
-        agendaItem.className = 'agenda-item';
-        
-        // MODIFICAÇÃO: Mostrar data e hora no agendamento
-        const dataDisplay = consulta.dataDisplay || new Date(consulta.data).toLocaleDateString('pt-BR');
-        
-        agendaItem.innerHTML = `
-            <div><strong>${dataDisplay} ${consulta.hora}</strong></div>
-            <div>${consulta.pacienteNome}</div>
-            <div>${consulta.procedimento}</div>
-            <div>R$ ${consulta.valor.toFixed(2)}</div>
-            <button class="btn btn-success btn-sm" onclick="realizarConsulta(${consulta.id})">
-                <i class="bi bi-check-circle"></i>
-            </button>
-        `;
-        agendaList.appendChild(agendaItem);
-    });
-    
-    const consultasHojeElement = document.getElementById('consultas-hoje');
-    if (consultasHojeElement) {
-        consultasHojeElement.textContent = `Consultas agendadas: ${agendaHoje.length}`;
-    }
-}
-
-function realizarConsulta(consultaId) {
-    const consultaIndex = agendaHoje.findIndex(c => c.id === consultaId);
-    if (consultaIndex === -1) return;
-    
-    const consulta = agendaHoje[consultaIndex];
-    consulta.status = 'realizado';
-    consulta.data = new Date().toISOString();
-    
-    consultas.push(consulta);
-    agendaHoje.splice(consultaIndex, 1);
-    
-    const paciente = pacientes.find(p => p.id === consulta.pacienteId);
-    if (paciente) {
-        paciente.sessoesRealizadas++;
-    }
-    
-    const hoje = new Date().toLocaleDateString('pt-BR');
-    if (relatorioDiario.data === hoje) {
-        relatorioDiario.totalAtendimentos++;
-        relatorioDiario.totalFaturamento += consulta.valor;
-        relatorioDiario.atendimentos.push({
-            id: consulta.id,
-            hora: new Date().toLocaleTimeString('pt-BR'),
-            paciente: consulta.pacienteNome,
-            procedimento: consulta.procedimento,
-            valor: consulta.valor
-        });
-    }
-    
-    salvarDadosUsuarioAtual();
-    atualizarAgendaHoje();
-    alert('Consulta realizada com sucesso!');
-}
-
-function atualizarRelatorios() {
-    const totalAtendimentosElement = document.getElementById("total-atendimentos");
-    if (totalAtendimentosElement) {
-        const totalAtendimentos = consultas.filter(c => c.status === 'realizado').length;
-        totalAtendimentosElement.textContent = totalAtendimentos;
-    }
-    
-    const totalPacientesElement = document.getElementById("total-pacientes");
-    if (totalPacientesElement) {
-        const totalPacientes = pacientes.filter(p => p.ativo).length;
-        totalPacientesElement.textContent = totalPacientes;
-    }
-    
-    const totalFaturamentoElement = document.getElementById("total-faturamento");
-    if (totalFaturamentoElement) {
-        const faturamentoTotal = consultas
-            .filter(c => c.status === 'realizado')
-            .reduce((total, c) => total + c.valor, 0);
-        totalFaturamentoElement.textContent = `R$ ${faturamentoTotal.toFixed(2)}`;
     }
 }
 
@@ -1732,18 +2139,142 @@ function atualizarTabelaConsultas() {
             <td>${dataFormatada}</td>
             <td>${consulta.pacienteNome}</td>
             <td>${consulta.procedimento}</td>
-            <td>${consulta.duracao} min</td>
             <td>R$ ${consulta.valor.toFixed(2)}</td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-            <td>
-                <button class="btn btn-outline-primary btn-sm" onclick="visualizarConsulta(${consulta.id})">
-                    <i class="bi bi-eye"></i>
-                </button>
-            </td>
         `;
         
         tableBody.appendChild(row);
     });
+}
+
+// ========== FUNÇÃO PARA REATIVAR PACIENTE COM MODAL DE OPÇÕES ==========
+function reativarPaciente(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+
+    // Criar modal para opções de reativação
+    const modalHTML = `
+        <div class="modal fade" id="modalReativacao" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reativar Paciente - ${paciente.nome}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <strong>Opções de Reativação:</strong><br>
+                            Escolha como deseja reativar este paciente.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Sessões Atuais: ${paciente.sessoesRealizadas}/${paciente.sessoesPrescritas}</label>
+                        </div>
+                        
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="opcaoReativacao" id="opcaoZerar" value="zerar" checked>
+                            <label class="form-check-label" for="opcaoZerar">
+                                <strong>Zerar Sessões</strong> - Iniciar novo ciclo de tratamento
+                            </label>
+                        </div>
+                        
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="opcaoReativacao" id="opcaoManter" value="manter">
+                            <label class="form-check-label" for="opcaoManter">
+                                <strong>Manter Sessões</strong> - Continuar de onde parou
+                            </label>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="opcaoReativacao" id="opcaoRedefinir" value="redefinir">
+                            <label class="form-check-label" for="opcaoRedefinir">
+                                <strong>Redefinir Total</strong> - Alterar total de sessões prescritas
+                            </label>
+                        </div>
+                        
+                        <div id="campoRedefinir" class="mt-2 d-none">
+                            <label class="form-label">Novo total de sessões prescritas:</label>
+                            <input type="number" class="form-control" id="novasSessoes" min="1" value="${paciente.sessoesPrescritas}">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmarReativacao(${pacienteId})">Reativar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remover modal existente se houver
+    const modalExistente = document.getElementById('modalReativacao');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Adicionar event listeners para mostrar/ocultar campo de redefinição
+    document.getElementById('opcaoRedefinir').addEventListener('change', function() {
+        document.getElementById('campoRedefinir').classList.toggle('d-none', !this.checked);
+    });
+    
+    document.getElementById('opcaoZerar').addEventListener('change', function() {
+        document.getElementById('campoRedefinir').classList.add('d-none');
+    });
+    
+    document.getElementById('opcaoManter').addEventListener('change', function() {
+        document.getElementById('campoRedefinir').classList.add('d-none');
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('modalReativacao'));
+    modal.show();
+}
+
+function confirmarReativacao(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+
+    const opcaoSelecionada = document.querySelector('input[name="opcaoReativacao"]:checked').value;
+    let mensagem = `✅ Paciente ${paciente.nome} reativado com sucesso!`;
+
+    switch (opcaoSelecionada) {
+        case 'zerar':
+            paciente.sessoesRealizadas = 0;
+            mensagem += `\n\nSessões zeradas para novo ciclo: 0/${paciente.sessoesPrescritas}`;
+            break;
+            
+        case 'manter':
+            // Mantém as sessões atuais
+            mensagem += `\n\nSessões mantidas: ${paciente.sessoesRealizadas}/${paciente.sessoesPrescritas}`;
+            break;
+            
+        case 'redefinir':
+            const novasSessoes = parseInt(document.getElementById('novasSessoes').value);
+            if (isNaN(novasSessoes) || novasSessoes <= 0) {
+                alert('Número de sessões inválido!');
+                return;
+            }
+            paciente.sessoesPrescritas = novasSessoes;
+            paciente.sessoesRealizadas = 0;
+            mensagem += `\n\nNovo ciclo definido: 0/${novasSessoes} sessões`;
+            break;
+    }
+
+    paciente.ativo = true;
+    salvarDadosUsuarioAtual();
+    atualizarTabelaTodosPacientes();
+    atualizarTabelaPacientes(); // Atualiza a tabela da tela inicial
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalReativacao'));
+    modal.hide();
+    
+    // CORREÇÃO: Voltar automaticamente para a tela inicial
+    setTimeout(() => {
+        mostrarPagina('inicio');
+    }, 500);
+    
+    alert(mensagem);
 }
 
 function atualizarTabelaTodosPacientes() {
@@ -1775,7 +2306,7 @@ function atualizarTabelaTodosPacientes() {
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>
                 <button class="btn btn-outline-success btn-sm" onclick="reativarPaciente(${paciente.id})" ${paciente.ativo ? 'disabled' : ''}>
-                    <i class="bi bi-person-check"></i>
+                    <i class="bi bi-person-check"></i> Reativar
                 </button>
                 <button class="btn btn-outline-danger btn-sm" onclick="excluirPaciente(${paciente.id})">
                     <i class="bi bi-trash"></i>
@@ -1785,16 +2316,6 @@ function atualizarTabelaTodosPacientes() {
         
         tableBody.appendChild(row);
     });
-}
-
-function reativarPaciente(pacienteId) {
-    const paciente = pacientes.find(p => p.id === pacienteId);
-    if (paciente) {
-        paciente.ativo = true;
-        salvarDadosUsuarioAtual();
-        atualizarTabelaTodosPacientes();
-        alert('Paciente reativado com sucesso!');
-    }
 }
 
 function excluirPaciente(pacienteId) {
@@ -1880,6 +2401,12 @@ function visualizarConsulta(consultaId) {
         `;
     }
     
+    // REMOVIDO: Botão de impressão
+    const botoesAcao = document.querySelector("#consultaModal .modal-footer");
+    if (botoesAcao) {
+        botoesAcao.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>';
+    }
+    
     const modalElement = document.getElementById("consultaModal");
     if (modalElement) {
         const modal = new bootstrap.Modal(modalElement);
@@ -1899,11 +2426,11 @@ function filtrarPacientes() {
 
 function carregarProcedimentosIniciais() {
     procedimentos = [
-        { id: 1, nome: 'Fisioterapia Convencional', valor: 120.00, duracao: 60 },
-        { id: 2, nome: 'Pilates', valor: 150.00, duracao: 60 },
-        { id: 3, nome: 'Hidroterapia', valor: 180.00, duracao: 45 },
-        { id: 4, nome: 'Acupuntura', valor: 100.00, duracao: 30 },
-        { id: 5, nome: 'Avaliação Inicial', valor: 200.00, duracao: 60 }
+        { id: 1, nome: 'Fisioterapia Convencional', valor: 120.00 },
+        { id: 2, nome: 'Pilates', valor: 150.00 },
+        { id: 3, nome: 'Hidroterapia', valor: 180.00 },
+        { id: 4, nome: 'Acupuntura', valor: 100.00 },
+        { id: 5, nome: 'Avaliação Inicial', valor: 200.00 }
     ];
 }
 
@@ -1966,11 +2493,14 @@ function mostrarPagina(pagina) {
     if (pagina === 'consultas') {
         atualizarTabelaConsultas();
     } else if (pagina === 'relatorios') {
-        atualizarRelatorios();
+        inicializarFiltroRelatorio();
+        aplicarFiltroRelatorio();
     } else if (pagina === 'pacientes') {
         atualizarTabelaTodosPacientes();
     } else if (pagina === 'relatorio-diario') {
         atualizarRelatorioDiario();
+    } else if (pagina === 'inicio') {
+        atualizarTabelaPacientes(); // Garante que a tabela da tela inicial seja atualizada
     }
 }
 
