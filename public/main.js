@@ -372,8 +372,8 @@ function configurarVisibilidadeRegistro() {
     if (MODO_CRIAR_CONTA_APENAS_ADMIN && loginContainer) {
         if (registerLink) {
             if (verificarSeEAdmin()) {
-                registerLink.innerHTML = '👑 Criar Conta (Admin)';
-                registerLink.style.color = '#ffc107';
+                registerLink.innerHTML = 'Fisio Plus';
+                registerLink.style.color = '#4dff07ff';
                 registerLink.style.fontWeight = 'bold';
             } else {
                 registerLink.innerHTML = '🔒 Criar Conta (Apenas Admin)';
