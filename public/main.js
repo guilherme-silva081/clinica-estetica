@@ -1026,9 +1026,7 @@ function criarModalUsuarios(usuarios) {
                                 <p><strong>Ativos:</strong> <span id="usuarios-ativos">${usuarios.filter(u => u.ativo).length}</span> usuário(s)</p>
                             </div>
                             <div class="col-md-6 text-end">
-                                <button class="btn btn-warning btn-sm" onclick="criarUsuarioAdmin()">
-                                    <i class="bi bi-person-plus"></i> Criar Novo Admin
-                                </button>
+                                
                             </div>
                         </div>
                     </div>
@@ -2055,6 +2053,7 @@ function inicializarFiltroRelatorio() {
             </div>
         `;
         
+        
         const relatoriosContainer = document.getElementById('pagina-relatorios');
         if (relatoriosContainer) {
             const primeiroCard = relatoriosContainer.querySelector('.card');
@@ -2066,6 +2065,380 @@ function inicializarFiltroRelatorio() {
         // Adicionar event listeners
         document.getElementById('data-inicio').addEventListener('change', aplicarFiltroRelatorio);
         document.getElementById('data-fim').addEventListener('change', aplicarFiltroRelatorio);
+    }
+}
+
+// ========== CSS PARA A ABA DE RELATÓRIOS ==========
+function adicionarCSSRelatorios() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        /* ========== ESTILOS PARA A ABA DE RELATÓRIOS ========== */
+        #pagina-relatorios .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #pagina-relatorios .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        #pagina-relatorios .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 1rem 1.5rem;
+            border: none;
+        }
+
+        #pagina-relatorios .card-header h6 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        #pagina-relatorios .card-body {
+            padding: 1.5rem;
+        }
+
+        /* ========== FILTRO DE PERÍODO ========== */
+        #filtro-relatorio {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+
+        #filtro-relatorio .card-header {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%) !important;
+        }
+
+        #filtro-relatorio .form-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        #filtro-relatorio .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.75rem;
+            transition: all 0.3s ease;
+        }
+
+        #filtro-relatorio .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        #filtro-relatorio .btn {
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        #filtro-relatorio .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+
+        #filtro-relatorio .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        /* ========== CARDS DE ESTATÍSTICAS ========== */
+        .stats-card {
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: 12px;
+            background: white;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .stats-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stats-label {
+            font-size: 1rem;
+            color: #6c757d;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ========== TABELA DE RELATÓRIOS ========== */
+        #pagina-relatorios .table {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        #pagina-relatorios .table thead th {
+            background: linear-gradient(135deg, #343a40 0%, #495057 100%);
+            color: white;
+            border: none;
+            padding: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+        }
+
+        #pagina-relatorios .table tbody td {
+            padding: 1rem;
+            vertical-align: middle;
+            border-color: #f1f3f4;
+        }
+
+        #pagina-relatorios .table tbody tr {
+            transition: all 0.3s ease;
+        }
+
+        #pagina-relatorios .table tbody tr:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.01);
+        }
+
+        /* ========== BADGES E STATUS ========== */
+        .status-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-realizado {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .status-cancelado {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+        }
+
+        /* ========== RESPONSIVIDADE ========== */
+        @media (max-width: 768px) {
+            #pagina-relatorios .card-body {
+                padding: 1rem;
+            }
+
+            .stats-card {
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .stats-number {
+                font-size: 2rem;
+            }
+
+            .stats-icon {
+                font-size: 2rem;
+            }
+
+            #pagina-relatorios .table {
+                font-size: 0.8rem;
+            }
+
+            #pagina-relatorios .table thead th {
+                padding: 0.75rem 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            #pagina-relatorios .table tbody td {
+                padding: 0.75rem 0.5rem;
+            }
+
+            #filtro-relatorio .btn {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            #filtro-relatorio .col-md-4 {
+                margin-bottom: 1rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .stats-number {
+                font-size: 1.5rem;
+            }
+
+            .stats-label {
+                font-size: 0.8rem;
+            }
+
+            #pagina-relatorios .table {
+                font-size: 0.7rem;
+            }
+        }
+
+        /* ========== ANIMAÇÕES ========== */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #pagina-relatorios .card {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        #pagina-relatorios .stats-card {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        #pagina-relatorios .table {
+            animation: fadeIn 0.7s ease-out;
+        }
+
+        /* ========== ESTILOS ESPECÍFICOS PARA OS CARDS DE ESTATÍSTICAS ========== */
+        .card-atendimentos {
+            border-left: 4px solid #007bff;
+        }
+
+        .card-pacientes {
+            border-left: 4px solid #28a745;
+        }
+
+        .card-faturamento {
+            border-left: 4px solid #ffc107;
+        }
+
+        .card-ticket {
+            border-left: 4px solid #dc3545;
+        }
+
+        /* ========== MELHORIAS NA TABELA ========== */
+        #pagina-relatorios .table-responsive {
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        #pagina-relatorios .table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        #pagina-relatorios .table tbody tr:nth-child(even):hover {
+            background-color: #f1f3f4;
+        }
+
+        /* ========== BOTÕES NA TABELA ========== */
+        #pagina-relatorios .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        #pagina-relatorios .btn-sm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ========== MODIFICAÇÃO NA FUNÇÃO DE INICIALIZAÇÃO ==========
+document.addEventListener('DOMContentLoaded', function() {
+    // ... código existente ...
+
+    // Adicionar CSS específico para relatórios
+    adicionarCSSRelatorios();
+    
+    // ... resto do código de inicialização ...
+});
+
+// ========== ATUALIZAR FUNÇÃO DE APLICAR FILTRO PARA MELHORAR VISUALIZAÇÃO ==========
+function aplicarFiltroRelatorio() {
+    const dataInicio = document.getElementById('data-inicio') ? document.getElementById('data-inicio').value : '';
+    const dataFim = document.getElementById('data-fim') ? document.getElementById('data-fim').value : '';
+    
+    let consultasFiltradas = consultas.filter(c => c.status === 'realizado');
+    let pacientesAtivosFiltrados = pacientes.filter(p => p.ativo);
+    
+    // Aplicar filtro de período se as datas estiverem preenchidas
+    if (dataInicio && dataFim) {
+        const inicio = new Date(dataInicio);
+        const fim = new Date(dataFim);
+        fim.setHours(23, 59, 59, 999);
+        
+        consultasFiltradas = consultasFiltradas.filter(consulta => {
+            const dataConsulta = new Date(consulta.data);
+            return dataConsulta >= inicio && dataConsulta <= fim;
+        });
+        
+        // Para pacientes ativos, considerar os que tiveram consultas no período
+        pacientesAtivosFiltrados = pacientes.filter(paciente => 
+            paciente.ativo && consultasFiltradas.some(consulta => consulta.pacienteId === paciente.id)
+        );
+    }
+    
+    // Atualizar elementos com animação
+    const totalAtendimentosElement = document.getElementById("total-atendimentos");
+    const totalPacientesElement = document.getElementById("total-pacientes");
+    const totalFaturamentoElement = document.getElementById("total-faturamento");
+    
+    if (totalAtendimentosElement) {
+        totalAtendimentosElement.textContent = consultasFiltradas.length;
+        totalAtendimentosElement.style.animation = 'pulse 0.5s ease';
+        setTimeout(() => totalAtendimentosElement.style.animation = '', 500);
+    }
+    
+    if (totalPacientesElement) {
+        totalPacientesElement.textContent = pacientesAtivosFiltrados.length;
+        totalPacientesElement.style.animation = 'pulse 0.5s ease';
+        setTimeout(() => totalPacientesElement.style.animation = '', 500);
+    }
+    
+    if (totalFaturamentoElement) {
+        const faturamentoTotal = consultasFiltradas.reduce((total, c) => total + c.valor, 0);
+        totalFaturamentoElement.textContent = `R$ ${faturamentoTotal.toFixed(2)}`;
+        totalFaturamentoElement.style.animation = 'pulse 0.5s ease';
+        setTimeout(() => totalFaturamentoElement.style.animation = '', 500);
+    }
+    
+    // Adicionar animação de pulso no CSS
+    if (!document.querySelector('#pulse-animation')) {
+        const pulseStyle = document.createElement('style');
+        pulseStyle.id = 'pulse-animation';
+        pulseStyle.innerHTML = `
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+        `;
+        document.head.appendChild(pulseStyle);
     }
 }
 
@@ -2106,6 +2479,8 @@ function desativarPaciente(pacienteId) {
     }
 }
 
+// ========== CORREÇÃO DA TABELA DE HISTÓRICO DE CONSULTAS ==========
+
 function atualizarTabelaConsultas() {
     const tableBody = document.getElementById('consultas-table-body');
     if (!tableBody) return;
@@ -2131,20 +2506,174 @@ function atualizarTabelaConsultas() {
     
     consultasOrdenadas.forEach(consulta => {
         const dataFormatada = new Date(consulta.data).toLocaleDateString('pt-BR');
-        const statusClass = consulta.status === 'realizado' ? 'status-realizado' : 'status-agendado';
-        const statusText = consulta.status === 'realizado' ? 'Realizado' : 'Agendado';
+        const horaFormatada = new Date(consulta.data).toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        
+        // Calcular duração baseada no procedimento
+        const duracao = calcularDuracaoProcedimento(consulta.procedimento);
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${dataFormatada}</td>
+            <td>${dataFormatada} ${horaFormatada}</td>
             <td>${consulta.pacienteNome}</td>
             <td>${consulta.procedimento}</td>
+            <td>${duracao} min</td>
             <td>R$ ${consulta.valor.toFixed(2)}</td>
-            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td><span class="badge bg-success">Realizado</span></td>
+            <td>
+                <button class="btn btn-outline-primary btn-sm" onclick="visualizarConsulta(${consulta.id})">
+                    <i class="bi bi-eye"></i> Detalhes
+                </button>
+            </td>
         `;
         
         tableBody.appendChild(row);
     });
+}
+
+// ========== FUNÇÃO PARA CALCULAR DURAÇÃO DO PROCEDIMENTO ==========
+
+function calcularDuracaoProcedimento(procedimento) {
+    const duracaoProcedimentos = {
+        'Avaliação Inicial': 60,
+        'Fisioterapia Convencional': 45,
+        'Pilates': 50,
+        'RPG': 60,
+        'Acupuntura': 30,
+        'Liberação Miofascial': 40,
+        'Hidroterapia': 45
+    };
+    
+    return duracaoProcedimentos[procedimento] || 45; // Default 45 minutos
+}
+
+// ========== ATUALIZAR FUNÇÃO DE VISUALIZAR CONSULTA ==========
+
+function visualizarConsulta(consultaId) {
+    const consulta = consultas.find(c => c.id === consultaId);
+    if (!consulta) return;
+    
+    const dataFormatada = new Date(consulta.data).toLocaleDateString('pt-BR');
+    const horaFormatada = new Date(consulta.data).toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    document.getElementById("consulta-numero").textContent = consulta.id;
+    document.getElementById("consulta-id").textContent = consulta.id;
+    document.getElementById("consulta-data").textContent = `${dataFormatada} às ${horaFormatada}`;
+    document.getElementById("consulta-paciente").textContent = consulta.pacienteNome;
+    document.getElementById("consulta-total").textContent = consulta.valor.toFixed(2);
+    
+    const tbody = document.getElementById("consulta-procedimentos");
+    if (tbody) {
+        tbody.innerHTML = "";
+        
+        tbody.innerHTML += `
+            <tr class="item">
+                <td>${consulta.procedimento}</td>
+                <td>R$ ${consulta.valor.toFixed(2)}</td>
+            </tr>
+        `;
+    }
+    
+    const modalElement = document.getElementById("consultaModal");
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+}
+
+// ========== ADICIONAR CSS PARA MELHORAR A TABELA ==========
+
+function adicionarCSSParaTabelaConsultas() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .table-consultas {
+            font-size: 0.875rem;
+        }
+        
+        .table-consultas th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .badge {
+            font-size: 0.75rem;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        @media (max-width: 768px) {
+            .table-consultas {
+                font-size: 0.8rem;
+            }
+            
+            .btn-sm {
+                padding: 0.2rem 0.4rem;
+                font-size: 0.7rem;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ========== INICIALIZAR CSS AO CARREGAR ==========
+
+document.addEventListener('DOMContentLoaded', function() {
+    adicionarCSSParaTabelaConsultas();
+});
+
+// ========== ATUALIZAR FUNÇÃO MOSTRAR PÁGINA PARA CHAMAR CORRETAMENTE ==========
+
+// Na função mostrarPagina, garantir que a tabela de consultas seja atualizada corretamente
+function mostrarPagina(pagina) {
+    const paginas = [
+        'pagina-inicio',
+        'pagina-consultas', 
+        'pagina-relatorios',
+        'pagina-pacientes',
+        'pagina-relatorio-diario'
+    ];
+    
+    paginas.forEach(p => {
+        const elemento = document.getElementById(p);
+        if (elemento) {
+            elemento.classList.add('d-none');
+        }
+    });
+    
+    const paginaElemento = document.getElementById(`pagina-${pagina}`);
+    if (paginaElemento) {
+        paginaElemento.classList.remove('d-none');
+    }
+    
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    const navElement = document.getElementById(`nav-${pagina}`);
+    if (navElement) {
+        navElement.classList.add('active');
+    }
+    
+    if (pagina === 'consultas') {
+        atualizarTabelaConsultas(); // AGORA CHAMANDO A FUNÇÃO CORRETA
+    } else if (pagina === 'relatorios') {
+        inicializarFiltroRelatorio();
+        aplicarFiltroRelatorio();
+    } else if (pagina === 'pacientes') {
+        atualizarTabelaTodosPacientes();
+    } else if (pagina === 'relatorio-diario') {
+        atualizarRelatorioDiario();
+    } else if (pagina === 'inicio') {
+        atualizarTabelaPacientes();
+    }
 }
 
 // ========== FUNÇÃO PARA REATIVAR PACIENTE COM MODAL DE OPÇÕES ==========
